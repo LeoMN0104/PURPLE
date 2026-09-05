@@ -11,6 +11,19 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 }
 
+async function readResponse(r) {
+  const text = await r.text();
+  let data;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    const clean = text.trim().replace(/\s+/g, ' ');
+    throw new Error(`Backend returned HTTP ${r.status}: ${clean || r.statusText}`);
+  }
+  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  return data;
+}
+
 function addMsg(role, text) {
   const d = document.createElement('div');
   d.className = 'msg ' + role;
@@ -51,9 +64,7 @@ async function requestPlan(text) {
   const r = await fetch('/api/plan', {
     method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({task:text})
   });
-  const data = await r.json();
-  if (!r.ok) throw new Error(data.error || 'Planning failed');
-  return data;
+  return readResponse(r);
 }
 
 async function executeStep(approved = false) {
@@ -65,17 +76,9 @@ async function executeStep(approved = false) {
   const r = await fetch('/api/execute-step', {
     method:'POST',
     headers:{'content-type':'application/json'},
-    body:JSON.stringify({
-      messages:history,
-      plan:activePlan,
-      stepIndex:currentStepIndex,
-      warnings:$('#warningsToggle').checked,
-      stepApproval:$('#approvalToggle').checked,
-      approved
-    })
+    body:JSON.stringify({messages:history,plan:activePlan,stepIndex:currentStepIndex,warnings:$('#warningsToggle').checked,stepApproval:$('#approvalToggle').checked,approved})
   });
-  const data = await r.json();
-  if (!r.ok) throw new Error(data.error || 'Step execution failed');
+  const data = await readResponse(r);
   if (data.status === 'awaiting_approval') {
     pendingApproval = data.step;
     renderApproval(pendingApproval);
@@ -95,20 +98,15 @@ async function executeStep(approved = false) {
   $('#gaugeValue').textContent = Math.floor(65 + Math.random()*30);
   $('#toolPct').textContent = Math.min(99, 45 + currentStepIndex * 12) + '%';
   $('#toolBar').style.width = $('#toolPct').textContent;
-  if (currentStepIndex < activePlan.steps.length) {
-    await executeStep(false);
-  } else {
-    finishPlan();
-  }
+  if (currentStepIndex < activePlan.steps.length) await executeStep(false); else finishPlan();
 }
 
 async function continuePlan(approved = false) {
   if (busy || !activePlan) return;
   busy = true;
   renderApproval(null);
-  try {
-    await executeStep(approved);
-  } catch (e) {
+  try { await executeStep(approved); }
+  catch (e) {
     addMsg('ai', 'I could not complete the current step: ' + e.message);
     trace('Step execution error');
     audit('P.U.R.P.L.E: execution stopped because a step failed.');
@@ -169,8 +167,7 @@ async function send() {
         method:'POST', headers:{'content-type':'application/json'},
         body:JSON.stringify({messages:history,warnings:$('#warningsToggle').checked,stepApproval:$('#approvalToggle').checked,plan:null})
       });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'Request failed');
+      const data = await readResponse(r);
       addMsg('ai', data.text);
       history.push({role:'assistant', content:data.text});
       audit('OpenAI: generated the direct response using ' + (data.model || 'configured model') + '.');
@@ -190,9 +187,7 @@ async function send() {
 }
 
 $('#send').onclick = send;
-$('#input').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-});
+$('#input').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
 
 $('#mic').onclick = () => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -211,12 +206,12 @@ $('#mic').onclick = () => {
 async function boot() {
   try {
     const r = await fetch('/api/status');
-    const s = await r.json();
+    const s = await readResponse(r);
     $('#composioState').textContent = s.composio ? 'ACTIVE' : 'PENDING';
     $('#voiceState').textContent = s.elevenlabsBridge ? 'ACTIVE' : 'BRIDGE';
     trace(`System online · V${s.version || '1'} · ${s.model}`);
-    audit(`Orchestrator: ${s.orchestrator ? 'ACTIVE' : 'OFF'} · Planner: ${s.planner ? 'ACTIVE' : 'OFF'} · Step engine: ${s.stepExecution ? 'ACTIVE' : 'OFF'}`);
-  } catch { trace('Backend unavailable'); }
+    audit(`Orchestrator: ${s.orchestrator ? 'ACTIVE' : 'OFF'} · Planner: ${s.planner ? 'ACTIVE' : 'OFF'} · Step engine: ${s.stepExecution ? 'ACTIVE' : 'OFF'} · MCP: ${s.mcp ? 'ACTIVE' : 'PENDING'}`);
+  } catch (e) { trace('Backend unavailable: ' + e.message); }
 }
 
 boot();
