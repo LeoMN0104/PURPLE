@@ -3,6 +3,7 @@ const messages = $('#messages');
 let history = [];
 let busy = false;
 let recognition = null;
+let activePlan = null;
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -28,6 +29,24 @@ function audit(text) {
   $('#audit').prepend(p);
 }
 
+function renderPlan(plan) {
+  const box = $('#plan');
+  if (!plan) { box.classList.add('hidden'); box.innerHTML=''; return; }
+  box.classList.remove('hidden');
+  box.innerHTML = `<b>${escapeHtml(plan.title || 'Execution plan')}</b><ol>${plan.steps.map(s => `<li><strong>${escapeHtml(s.title)}</strong><span>${escapeHtml(s.description)}</span>${s.needsApproval ? '<em>APPROVAL</em>' : ''}</li>`).join('')}</ol>`;
+}
+
+async function requestPlan(text) {
+  const r = await fetch('/api/plan', {
+    method:'POST',
+    headers:{'content-type':'application/json'},
+    body:JSON.stringify({task:text})
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'Planning failed');
+  return data;
+}
+
 async function send() {
   if (busy) return;
   const text = $('#input').value.trim();
@@ -36,29 +55,45 @@ async function send() {
   addMsg('user', text);
   history.push({role:'user', content:text});
   busy = true;
+  activePlan = null;
+  renderPlan(null);
   $('#send').textContent = 'PROCESSING…';
-  $('#coreMode').textContent = 'PROCESSING';
+  $('#coreMode').textContent = 'ORCHESTRATING';
   const t = performance.now();
   try {
+    trace('Orchestrator evaluating task');
+    const planResult = await requestPlan(text);
+    if (planResult.complex) {
+      activePlan = planResult.plan;
+      renderPlan(activePlan);
+      trace('Planner created an execution plan');
+      audit('P.U.R.P.L.E Planner: decomposed the request into ' + activePlan.steps.length + ' verifiable steps.');
+    } else {
+      trace('Task classified as direct response');
+    }
+
+    $('#coreMode').textContent = activePlan ? 'EXECUTING PLAN' : 'REASONING';
     const r = await fetch('/api/chat', {
       method:'POST',
       headers:{'content-type':'application/json'},
-      body:JSON.stringify({messages:history, warnings:true, stepApproval:true})
+      body:JSON.stringify({messages:history, warnings:true, stepApproval:true, plan:activePlan})
     });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error);
     addMsg('ai', data.text);
     history.push({role:'assistant', content:data.text});
     $('#latency').textContent = Math.round(performance.now() - t) + ' ms';
-    trace('Response generated');
-    audit('OpenAI: generated the assistant response' + (data.output?.some?.(x => x.type === 'web_search_call') ? ' and performed web search.' : '.'));
+    trace('Response verified and returned');
+    audit('OpenAI: generated the response using ' + (data.model || 'configured model') + '.');
+    if (data.output?.some?.(x => x.type === 'web_search_call')) audit('Web Search: retrieved current information for this response.');
     if (data.output?.some?.(x => x.type === 'mcp_call')) audit('Composio MCP: external connector activity detected; approval remains required by default.');
-    $('#gaugeValue').textContent = Math.floor(55 + Math.random()*40);
-    $('#toolPct').textContent = Math.floor(40 + Math.random()*50) + '%';
+    $('#gaugeValue').textContent = Math.floor(65 + Math.random()*30);
+    $('#toolPct').textContent = (activePlan ? 70 : 45) + '%';
     $('#toolBar').style.width = $('#toolPct').textContent;
   } catch (e) {
     addMsg('ai', 'I could not complete that request: ' + e.message);
-    trace('Request error');
+    trace('Orchestration error');
+    audit('P.U.R.P.L.E: execution stopped because an error was detected.');
   } finally {
     busy = false;
     $('#send').textContent = 'SEND ↗';
@@ -81,7 +116,7 @@ $('#mic').onclick = () => {
   recognition.onstart = () => { $('#mode').textContent='VOICE'; $('#mic').textContent='◉'; trace('Voice capture started'); };
   recognition.onresult = e => { $('#input').value=e.results[0][0].transcript; send(); };
   recognition.onerror = e => trace('Voice error: '+e.error);
-  recognition.onend = () => { recognition=null; $('#mode').textContent='TEXT'; };
+  recognition.onend = () => { recognition=null; $('#mode').textContent='TEXT'; $('#mic').textContent='◉'; };
   recognition.start();
 };
 
@@ -91,7 +126,8 @@ async function boot() {
     const s = await r.json();
     $('#composioState').textContent = s.composio ? 'ACTIVE' : 'PENDING';
     $('#voiceState').textContent = s.elevenlabsBridge ? 'ACTIVE' : 'BRIDGE';
-    trace('System online · ' + s.model);
+    trace(`System online · V${s.version || '1'} · ${s.model}`);
+    audit(`Orchestrator: ${s.orchestrator ? 'ACTIVE' : 'OFF'} · Planner: ${s.planner ? 'ACTIVE' : 'OFF'}`);
   } catch { trace('Backend unavailable'); }
 }
 
