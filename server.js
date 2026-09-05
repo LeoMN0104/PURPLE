@@ -44,18 +44,30 @@ function isComplex(text = '') {
   return words >= 35 || signals.test(text);
 }
 
+function normalizePlan(plan) {
+  if (!plan || !Array.isArray(plan.steps) || plan.steps.length === 0) return null;
+  return {
+    title: String(plan.title || 'Execution plan'),
+    complexity: ['simple', 'moderate', 'complex'].includes(plan.complexity) ? plan.complexity : 'moderate',
+    steps: plan.steps.slice(0, 6).map((s, i) => ({
+      id: Number.isFinite(Number(s.id)) ? Number(s.id) : i + 1,
+      title: String(s.title || `Step ${i + 1}`),
+      description: String(s.description || 'Complete this step and verify the result.'),
+      needsApproval: Boolean(s.needsApproval)
+    }))
+  };
+}
+
 async function buildPlan(task) {
   if (!client) throw new Error('OPENAI_API_KEY is not configured.');
   const response = await client.responses.create({
     model: MODEL,
-    instructions: `Create a concise execution plan for P.U.R.P.L.E. Return ONLY valid JSON with this exact shape: {"title":"string","complexity":"simple|moderate|complex","steps":[{"id":1,"title":"string","description":"string","needsApproval":false}]}. Use 2-6 steps. Do not include hidden reasoning. Make steps concrete and verifiable.`,
+    instructions: `Create a concise execution plan for P.U.R.P.L.E. Return ONLY valid JSON with this exact shape: {"title":"string","complexity":"simple|moderate|complex","steps":[{"id":1,"title":"string","description":"string","needsApproval":false}]}. Use 2-6 steps. Set needsApproval=true for steps that would send, publish, delete, purchase, modify important external state, or otherwise have meaningful consequences. Do not include hidden reasoning. Make steps concrete and verifiable.`,
     input: task
   });
   const raw = response.output_text.trim().replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
   try {
-    const plan = JSON.parse(raw);
-    if (!Array.isArray(plan.steps)) throw new Error('Invalid plan');
-    return plan;
+    return normalizePlan(JSON.parse(raw)) || normalizePlan(null);
   } catch {
     return {
       title: 'Execution plan',
@@ -69,18 +81,56 @@ async function buildPlan(task) {
   }
 }
 
+async function runStep({ messages, plan, stepIndex, warnings = true, stepApproval = true, approved = false }) {
+  if (!client) throw new Error('OPENAI_API_KEY is not configured.');
+  const safePlan = normalizePlan(plan);
+  if (!safePlan) throw new Error('A valid execution plan is required.');
+  if (stepIndex < 0 || stepIndex >= safePlan.steps.length) throw new Error('Invalid step index.');
+
+  const step = safePlan.steps[stepIndex];
+  if (stepApproval && step.needsApproval && !approved) {
+    return { status: 'awaiting_approval', stepIndex, step, plan: safePlan };
+  }
+
+  const previous = safePlan.steps.slice(0, stepIndex).map((s, i) => `${i + 1}. ${s.title}`).join('\n');
+  const policy = `UI policy: warnings=${warnings ? 'ON' : 'OFF'}; step-by-step approval=${stepApproval ? 'ON' : 'OFF'}.`;
+  const stepContext = `\nACTIVE PLAN: ${safePlan.title}\nCURRENT STEP ${stepIndex + 1}/${safePlan.steps.length}: ${step.title}\nSTEP DESCRIPTION: ${step.description}\nCOMPLETED PREVIOUS STEPS: ${previous || 'none'}\nExecute ONLY the current step. Do not pretend later steps are complete. State what was actually completed and identify any blocker.`;
+
+  const response = await client.responses.create({
+    model: MODEL,
+    instructions: SYSTEM + policy + stepContext,
+    tools: [{ type: 'web_search' }, ...mcpTools()],
+    input: messages.slice(-24)
+  });
+
+  return {
+    status: 'completed',
+    stepIndex,
+    step,
+    text: response.output_text,
+    responseId: response.id,
+    output: response.output,
+    model: MODEL,
+    plan: safePlan
+  };
+}
+
 app.get('/api/status', (_req, res) => {
   res.json({
     ok: true,
     configured: Boolean(client),
     model: MODEL,
-    version: '2.0.0',
+    version: '2.1.0',
     orchestrator: true,
     planner: true,
+    stepExecution: true,
+    approvalEngine: true,
     composio: Boolean(process.env.COMPOSIO_MCP_URL),
     elevenlabsBridge: Boolean(process.env.ELEVENLABS_BRIDGE_URL)
   });
 });
+
+app.get('/api/health', (_req, res) => res.json({ ok: true, uptime: Math.round(process.uptime()), version: '2.1.0' }));
 
 app.post('/api/plan', async (req, res) => {
   try {
@@ -93,6 +143,27 @@ app.post('/api/plan', async (req, res) => {
   } catch (e) {
     console.error('Planner error:', e);
     res.status(500).json({ error: e?.message || 'Planning failed' });
+  }
+});
+
+app.post('/api/execute-step', async (req, res) => {
+  try {
+    const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
+    const plan = req.body?.plan;
+    const stepIndex = Number(req.body?.stepIndex);
+    if (!Number.isInteger(stepIndex)) return res.status(400).json({ error: 'stepIndex is required.' });
+    const result = await runStep({
+      messages,
+      plan,
+      stepIndex,
+      warnings: req.body?.warnings !== false,
+      stepApproval: req.body?.stepApproval !== false,
+      approved: req.body?.approved === true
+    });
+    res.json(result);
+  } catch (e) {
+    console.error('Step execution error:', e);
+    res.status(500).json({ error: e?.message || 'Step execution failed' });
   }
 });
 
@@ -130,4 +201,4 @@ app.post('/api/elevenlabs', async (req, res) => {
   }
 });
 
-app.listen(port, '0.0.0.0', () => console.log(`P.U.R.P.L.E V2 running on port ${port}`));
+app.listen(port, '0.0.0.0', () => console.log(`P.U.R.P.L.E V2.1 running on port ${port}`));
