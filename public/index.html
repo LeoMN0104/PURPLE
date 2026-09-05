@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>P.U.R.P.L.E — Personal AI</title>
+<link rel="stylesheet" href="/styles.css"/>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="brand"><div class="brand-mark">P</div><div><strong>P.U.R.P.L.E</strong><span>Personal Utility & Reasoning Protocol</span></div></div>
+    <div class="status"><i></i><span id="statusText">SYSTEM ONLINE</span><b id="clock">--:--</b></div>
+  </header>
+  <main class="grid">
+    <aside class="left panel">
+      <div class="section-title">CORE STATUS</div>
+      <div class="core-mini"><div class="mini-orbit"></div><div><b>NEURAL CORE</b><span>READY</span></div></div>
+      <div class="metric"><label>REASONING</label><div class="bar"><i style="width:91%"></i></div><b>91%</b></div>
+      <div class="metric"><label>CONTEXT</label><div class="bar"><i style="width:73%"></i></div><b>73%</b></div>
+      <div class="metric"><label>TOOLS</label><div class="bar"><i id="toolBar" style="width:38%"></i></div><b id="toolPct">38%</b></div>
+      <div class="section-title spaced">CONNECTORS</div>
+      <div class="connector-list"><span>OPENAI</span><em>ACTIVE</em><span>WEB SEARCH</span><em>ACTIVE</em><span>COMPOSIO</span><em id="composioState">PENDING</em><span>ELEVENLABS</span><em id="voiceState">BRIDGE</em></div>
+      <button class="ghost" id="settingsBtn">⚙ SETTINGS</button>
+    </aside>
+
+    <section class="center">
+      <div class="hero panel">
+        <div class="hero-grid"></div><div class="energy"></div><div class="core-ring r1"></div><div class="core-ring r2"></div><div class="core-ring r3"></div>
+        <div class="core-label"><span>PROCESSING CORE</span><strong>P.U.R.P.L.E</strong><small id="coreMode">STANDBY • READY FOR INPUT</small></div>
+        <div class="hud hud-a">LATENCY<br><b id="latency">-- ms</b></div><div class="hud hud-b">MODE<br><b id="mode">TEXT</b></div>
+      </div>
+      <div class="chat panel">
+        <div id="messages" class="messages">
+          <div class="msg ai"><div class="avatar">P</div><div><small>P.U.R.P.L.E</small><p>Systems initialized. Ask me something, or tell me what you want done.</p></div></div>
+        </div>
+        <div id="plan" class="plan hidden"></div>
+        <div class="composer"><button id="mic" class="icon-btn" title="Voice input">◉</button><textarea id="input" rows="1" placeholder="Talk to P.U.R.P.L.E…"></textarea><button id="send" class="send">SEND ↗</button></div>
+      </div>
+    </section>
+
+    <aside class="right">
+      <div class="panel visual"><div class="section-title">LIVE TELEMETRY</div><div class="gauge"><div class="gauge-arc"></div><strong id="gaugeValue">72</strong><span>ACTIVITY</span></div><div class="spark" id="spark"></div></div>
+      <div class="panel visual"><div class="section-title">ACTIVITY TRACE</div><div id="trace" class="trace"><div><b>15:44</b><span>Core initialized</span></div></div></div>
+      <div class="panel visual"><div class="section-title">CONNECTOR AUDIT</div><div id="audit" class="audit"><p>Awaiting tool activity…</p></div></div>
+    </aside>
+  </main>
+</div>
+<script src="/app.js"></script>
+</body></html>
