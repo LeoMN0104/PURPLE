@@ -20,6 +20,9 @@
       <div class="metric"><label>TOOLS</label><div class="bar"><i id="toolBar" style="width:38%"></i></div><b id="toolPct">38%</b></div>
       <div class="section-title spaced">CONNECTORS</div>
       <div class="connector-list"><span>OPENAI</span><em>ACTIVE</em><span>WEB SEARCH</span><em>ACTIVE</em><span>COMPOSIO</span><em id="composioState">PENDING</em><span>ELEVENLABS</span><em id="voiceState">BRIDGE</em></div>
+      <div class="section-title spaced">EXECUTION POLICY</div>
+      <label class="toggle"><input id="warningsToggle" type="checkbox" checked><span>Warnings</span></label>
+      <label class="toggle"><input id="approvalToggle" type="checkbox" checked><span>Step approval</span></label>
       <button class="ghost" id="settingsBtn">⚙ SETTINGS</button>
     </aside>
 
@@ -34,6 +37,7 @@
           <div class="msg ai"><div class="avatar">P</div><div><small>P.U.R.P.L.E</small><p>Systems initialized. Ask me something, or tell me what you want done.</p></div></div>
         </div>
         <div id="plan" class="plan hidden"></div>
+        <div id="approval" class="approval hidden"></div>
         <div class="composer"><button id="mic" class="icon-btn" title="Voice input">◉</button><textarea id="input" rows="1" placeholder="Talk to P.U.R.P.L.E…"></textarea><button id="send" class="send">SEND ↗</button></div>
       </div>
     </section>
