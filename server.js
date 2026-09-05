@@ -3,8 +3,8 @@ import express from 'express';
 import OpenAI from 'openai';
 
 const app = express();
-const port = process.env.PORT || 3000;
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const port = Number(process.env.PORT) || 3000;
+const client = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static('public'));
@@ -36,6 +36,7 @@ function mcpTools() {
 app.get('/api/status', (_req, res) => {
   res.json({
     ok: true,
+    configured: Boolean(client),
     model: process.env.OPENAI_MODEL || 'gpt-5',
     composio: Boolean(process.env.COMPOSIO_MCP_URL),
     elevenlabsBridge: Boolean(process.env.ELEVENLABS_BRIDGE_URL)
@@ -44,7 +45,7 @@ app.get('/api/status', (_req, res) => {
 
 app.post('/api/chat', async (req, res) => {
   try {
-    if (!process.env.OPENAI_API_KEY) return res.status(500).json({ error: 'OPENAI_API_KEY is not configured.' });
+    if (!client) return res.status(503).json({ error: 'P.U.R.P.L.E is online, but OPENAI_API_KEY is not configured in Render yet.' });
     const { messages = [], warnings = true, stepApproval = true } = req.body;
     const policy = `\nUI policy: warnings=${warnings ? 'ON' : 'OFF'}; step-by-step approval=${stepApproval ? 'ON' : 'OFF'}. Respect these preferences for the interaction, while still avoiding unsafe or unauthorized actions.`;
     const response = await client.responses.create({
@@ -75,4 +76,4 @@ app.post('/api/elevenlabs', async (req, res) => {
   }
 });
 
-app.listen(port, () => console.log(`P.U.R.P.L.E running on http://localhost:${port}`));
+app.listen(port, '0.0.0.0', () => console.log(`P.U.R.P.L.E running on port ${port}`));
