@@ -4,5 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {"start": "node server.js"},
-  "dependencies": {"dotenv": "latest", "express": "latest", "openai": "latest"}
+  "dependencies": {
+    "@modelcontextprotocol/node": "latest",
+    "@modelcontextprotocol/server": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "openai": "latest",
+    "zod": "latest"
+  }
 }
