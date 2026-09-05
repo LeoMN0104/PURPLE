@@ -58,6 +58,18 @@ function normalizePlan(plan) {
   };
 }
 
+function fallbackPlan() {
+  return {
+    title: 'Execution plan',
+    complexity: 'moderate',
+    steps: [
+      { id: 1, title: 'Understand the request', description: 'Define the desired outcome and constraints.', needsApproval: false },
+      { id: 2, title: 'Execute safely', description: 'Use the available capabilities and verify the result.', needsApproval: false },
+      { id: 3, title: 'Report', description: 'Summarize the result, limitations, and next action.', needsApproval: false }
+    ]
+  };
+}
+
 async function buildPlan(task) {
   if (!client) throw new Error('OPENAI_API_KEY is not configured.');
   const response = await client.responses.create({
@@ -67,17 +79,11 @@ async function buildPlan(task) {
   });
   const raw = response.output_text.trim().replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
   try {
-    return normalizePlan(JSON.parse(raw)) || normalizePlan(null);
+    const parsed = normalizePlan(JSON.parse(raw));
+    if (!parsed) throw new Error('Invalid plan');
+    return parsed;
   } catch {
-    return {
-      title: 'Execution plan',
-      complexity: 'moderate',
-      steps: [
-        { id: 1, title: 'Understand the request', description: 'Define the desired outcome and constraints.', needsApproval: false },
-        { id: 2, title: 'Execute safely', description: 'Use the available capabilities and verify the result.', needsApproval: false },
-        { id: 3, title: 'Report', description: 'Summarize the result, limitations, and next action.', needsApproval: false }
-      ]
-    };
+    return fallbackPlan();
   }
 }
 
