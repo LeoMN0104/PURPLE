@@ -31,12 +31,7 @@ V2 ORCHESTRATOR RULES:
 
 function mcpTools() {
   if (!process.env.COMPOSIO_MCP_URL) return [];
-  const tool = {
-    type: 'mcp',
-    server_label: 'composio',
-    server_url: process.env.COMPOSIO_MCP_URL,
-    require_approval: 'always'
-  };
+  const tool = { type: 'mcp', server_label: 'composio', server_url: process.env.COMPOSIO_MCP_URL, require_approval: 'always' };
   if (process.env.COMPOSIO_MCP_AUTH) tool.authorization = process.env.COMPOSIO_MCP_AUTH;
   return [tool];
 }
@@ -66,38 +61,26 @@ function buildDenoMcpServer() {
   server.registerTool('deno_list_apps', {
     description: 'List applications in the connected Deno Deploy organization.',
     inputSchema: z.object({ limit: z.number().int().min(1).max(100).optional() })
-  }, async ({ limit }) => ({
-    content: [{ type: 'text', text: JSON.stringify(await denoApi(`/apps?limit=${limit || 30}`)) }]
-  }));
+  }, async ({ limit }) => ({ content: [{ type: 'text', text: JSON.stringify(await denoApi(`/apps?limit=${limit || 30}`)) }] }));
 
   server.registerTool('deno_get_app', {
     description: 'Get configuration and current details for a Deno Deploy app.',
     inputSchema: z.object({ app: z.string().min(1).describe('App slug or app UUID') })
-  }, async ({ app }) => ({
-    content: [{ type: 'text', text: JSON.stringify(await denoApi(`/apps/${encodeURIComponent(app)}`)) }]
-  }));
+  }, async ({ app }) => ({ content: [{ type: 'text', text: JSON.stringify(await denoApi(`/apps/${encodeURIComponent(app)}`)) }] }));
 
   server.registerTool('deno_list_revisions', {
     description: 'List recent revisions for a Deno Deploy app.',
     inputSchema: z.object({ app: z.string().min(1), limit: z.number().int().min(1).max(100).optional() })
-  }, async ({ app, limit }) => ({
-    content: [{ type: 'text', text: JSON.stringify(await denoApi(`/apps/${encodeURIComponent(app)}/revisions?limit=${limit || 30}`)) }]
-  }));
+  }, async ({ app, limit }) => ({ content: [{ type: 'text', text: JSON.stringify(await denoApi(`/apps/${encodeURIComponent(app)}/revisions?limit=${limit || 30}`)) }] }));
 
   server.registerTool('deno_get_revision', {
     description: 'Get the status and details of a Deno Deploy revision.',
     inputSchema: z.object({ revision: z.string().min(1).describe('Revision ID') })
-  }, async ({ revision }) => ({
-    content: [{ type: 'text', text: JSON.stringify(await denoApi(`/revisions/${encodeURIComponent(revision)}`)) }]
-  }));
+  }, async ({ revision }) => ({ content: [{ type: 'text', text: JSON.stringify(await denoApi(`/revisions/${encodeURIComponent(revision)}`)) }] }));
 
   server.registerTool('deno_get_logs', {
     description: 'Query Deno Deploy application logs for a bounded time range.',
-    inputSchema: z.object({
-      app: z.string().min(1),
-      start: z.string().min(1).describe('ISO-8601 start time'),
-      end: z.string().optional().describe('ISO-8601 end time')
-    })
+    inputSchema: z.object({ app: z.string().min(1), start: z.string().min(1).describe('ISO-8601 start time'), end: z.string().optional().describe('ISO-8601 end time') })
   }, async ({ app, start, end }) => {
     const params = new URLSearchParams({ start, limit: '200' });
     if (end) params.set('end', end);
@@ -120,10 +103,7 @@ function mcpAuth(req, res, next) {
   next();
 }
 
-// Remote Streamable HTTP MCP endpoint for Composio.
-// Composio must point to https://<purple-app-domain>/mcp, not api.deno.com.
-app.all('/mcp', mcpAuth, (req, res) => void nodeMcpHandler(req, res));
-
+app.all('/mcp', mcpAuth, (req, res) => void nodeMcpHandler(req, res, req.body));
 app.use(express.static('public'));
 
 function isComplex(text = '') {
@@ -137,42 +117,23 @@ function normalizePlan(plan) {
   return {
     title: String(plan.title || 'Execution plan'),
     complexity: ['simple', 'moderate', 'complex'].includes(plan.complexity) ? plan.complexity : 'moderate',
-    steps: plan.steps.slice(0, 6).map((s, i) => ({
-      id: Number.isFinite(Number(s.id)) ? Number(s.id) : i + 1,
-      title: String(s.title || `Step ${i + 1}`),
-      description: String(s.description || 'Complete this step and verify the result.'),
-      needsApproval: Boolean(s.needsApproval)
-    }))
+    steps: plan.steps.slice(0, 6).map((s, i) => ({ id: Number.isFinite(Number(s.id)) ? Number(s.id) : i + 1, title: String(s.title || `Step ${i + 1}`), description: String(s.description || 'Complete this step and verify the result.'), needsApproval: Boolean(s.needsApproval) }))
   };
 }
 
 function fallbackPlan() {
-  return {
-    title: 'Execution plan',
-    complexity: 'moderate',
-    steps: [
-      { id: 1, title: 'Understand the request', description: 'Define the desired outcome and constraints.', needsApproval: false },
-      { id: 2, title: 'Execute safely', description: 'Use the available capabilities and verify the result.', needsApproval: false },
-      { id: 3, title: 'Report', description: 'Summarize the result, limitations, and next action.', needsApproval: false }
-    ]
-  };
+  return { title: 'Execution plan', complexity: 'moderate', steps: [
+    { id: 1, title: 'Understand the request', description: 'Define the desired outcome and constraints.', needsApproval: false },
+    { id: 2, title: 'Execute safely', description: 'Use the available capabilities and verify the result.', needsApproval: false },
+    { id: 3, title: 'Report', description: 'Summarize the result, limitations, and next action.', needsApproval: false }
+  ] };
 }
 
 async function buildPlan(task) {
   if (!client) throw new Error('OPENAI_API_KEY is not configured.');
-  const response = await client.responses.create({
-    model: MODEL,
-    instructions: `Create a concise execution plan for P.U.R.P.L.E. Return ONLY valid JSON with this exact shape: {"title":"string","complexity":"simple|moderate|complex","steps":[{"id":1,"title":"string","description":"string","needsApproval":false}]}. Use 2-6 steps. Set needsApproval=true for steps that would send, publish, delete, purchase, modify important external state, or otherwise have meaningful consequences. Do not include hidden reasoning. Make steps concrete and verifiable.`,
-    input: task
-  });
+  const response = await client.responses.create({ model: MODEL, instructions: `Create a concise execution plan for P.U.R.P.L.E. Return ONLY valid JSON with this exact shape: {"title":"string","complexity":"simple|moderate|complex","steps":[{"id":1,"title":"string","description":"string","needsApproval":false}]}. Use 2-6 steps. Set needsApproval=true for steps that would send, publish, delete, purchase, modify important external state, or otherwise have meaningful consequences. Do not include hidden reasoning. Make steps concrete and verifiable.`, input: task });
   const raw = response.output_text.trim().replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
-  try {
-    const parsed = normalizePlan(JSON.parse(raw));
-    if (!parsed) throw new Error('Invalid plan');
-    return parsed;
-  } catch {
-    return fallbackPlan();
-  }
+  try { const parsed = normalizePlan(JSON.parse(raw)); if (!parsed) throw new Error('Invalid plan'); return parsed; } catch { return fallbackPlan(); }
 }
 
 async function runStep({ messages, plan, stepIndex, warnings = true, stepApproval = true, approved = false }) {
@@ -189,23 +150,7 @@ async function runStep({ messages, plan, stepIndex, warnings = true, stepApprova
   return { status: 'completed', stepIndex, step, text: response.output_text, responseId: response.id, output: response.output, model: MODEL, plan: safePlan };
 }
 
-app.get('/api/status', (_req, res) => {
-  res.json({
-    ok: true,
-    configured: Boolean(client),
-    model: MODEL,
-    version: '2.2.0',
-    orchestrator: true,
-    planner: true,
-    stepExecution: true,
-    approvalEngine: true,
-    composio: Boolean(process.env.COMPOSIO_MCP_URL),
-    elevenlabsBridge: Boolean(process.env.ELEVENLABS_BRIDGE_URL),
-    mcp: Boolean(process.env.PURPLE_MCP_API_KEY),
-    denoApi: Boolean(process.env.DENO_DEPLOY_TOKEN)
-  });
-});
-
+app.get('/api/status', (_req, res) => res.json({ ok: true, configured: Boolean(client), model: MODEL, version: '2.2.0', orchestrator: true, planner: true, stepExecution: true, approvalEngine: true, composio: Boolean(process.env.COMPOSIO_MCP_URL), elevenlabsBridge: Boolean(process.env.ELEVENLABS_BRIDGE_URL), mcp: Boolean(process.env.PURPLE_MCP_API_KEY), denoApi: Boolean(process.env.DENO_DEPLOY_TOKEN) }));
 app.get('/api/health', (_req, res) => res.json({ ok: true, uptime: Math.round(process.uptime()), version: '2.2.0' }));
 
 app.post('/api/plan', async (req, res) => {
@@ -215,10 +160,7 @@ app.post('/api/plan', async (req, res) => {
     if (!task) return res.status(400).json({ error: 'Task is required.' });
     if (!isComplex(task)) return res.json({ complex: false, plan: null });
     res.json({ complex: true, plan: await buildPlan(task) });
-  } catch (e) {
-    console.error('Planner error:', e);
-    res.status(500).json({ error: e?.message || 'Planning failed' });
-  }
+  } catch (e) { console.error('Planner error:', e); res.status(500).json({ error: e?.message || 'Planning failed' }); }
 });
 
 app.post('/api/execute-step', async (req, res) => {
@@ -228,10 +170,7 @@ app.post('/api/execute-step', async (req, res) => {
     if (!Number.isInteger(stepIndex)) return res.status(400).json({ error: 'stepIndex is required.' });
     const result = await runStep({ messages, plan: req.body?.plan, stepIndex, warnings: req.body?.warnings !== false, stepApproval: req.body?.stepApproval !== false, approved: req.body?.approved === true });
     res.json(result);
-  } catch (e) {
-    console.error('Step execution error:', e);
-    res.status(500).json({ error: e?.message || 'Step execution failed' });
-  }
+  } catch (e) { console.error('Step execution error:', e); res.status(500).json({ error: e?.message || 'Step execution failed' }); }
 });
 
 app.post('/api/chat', async (req, res) => {
@@ -242,10 +181,7 @@ app.post('/api/chat', async (req, res) => {
     const planContext = plan ? `\nACTIVE EXECUTION PLAN:\n${JSON.stringify(plan)}\nFollow it, report progress, and do not invent completed steps.` : '';
     const response = await client.responses.create({ model: MODEL, instructions: SYSTEM + policy + planContext, tools: [{ type: 'web_search' }, ...mcpTools()], input: messages.slice(-24) });
     res.json({ text: response.output_text, responseId: response.id, output: response.output, model: MODEL });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: e?.message || 'Request failed' });
-  }
+  } catch (e) { console.error(e); res.status(500).json({ error: e?.message || 'Request failed' }); }
 });
 
 app.post('/api/elevenlabs', async (req, res) => {
